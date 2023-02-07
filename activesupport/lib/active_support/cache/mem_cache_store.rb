@@ -93,6 +93,9 @@ module ActiveSupport
         addresses = nil if addresses.compact.empty?
         pool_options = retrieve_pool_options(options)
 
+        # puts options.inspect
+        # puts pool_options.inspect
+
         if pool_options.empty?
           Dalli::Client.new(addresses, options)
         else
@@ -122,11 +125,15 @@ module ActiveSupport
         if addresses.first.is_a?(Dalli::Client)
           @data = addresses.first
         else
+          # puts options
           mem_cache_options = options.dup
           # The value "compress: false" prevents duplicate compression within Dalli.
           mem_cache_options[:compress] = false
-          (UNIVERSAL_OPTIONS - %i(compress)).each { |name| mem_cache_options.delete(name) }
+          # (UNIVERSAL_OPTIONS - %i(compress)).each { |name| mem_cache_options.delete(name) }
+          # puts "mem_cache_options"
+          # puts mem_cache_options
           @data = self.class.build_mem_cache(*(addresses + [mem_cache_options]))
+          # puts @data.inspect
         end
       end
 
@@ -260,6 +267,7 @@ module ActiveSupport
         end
 
         def read_serialized_entry(key, **options)
+          # debugger
           rescue_error_with(nil) do
             @data.with { |c| c.get(key, options) }
           end
@@ -271,6 +279,7 @@ module ActiveSupport
         end
 
         def write_serialized_entry(key, payload, **options)
+          # debugger
           method = options[:unless_exist] ? :add : :set
           expires_in = options[:expires_in].to_i
           if options[:race_condition_ttl] && expires_in > 0 && !options[:raw]
@@ -287,14 +296,23 @@ module ActiveSupport
         # Reads multiple entries from the cache implementation.
         def read_multi_entries(names, **options)
           keys_to_names = names.index_by { |name| normalize_key(name, options) }
+          # puts "Keys to normalized keys"
+          # puts keys_to_names
 
           raw_values = @data.with { |c| c.get_multi(keys_to_names.keys) }
           values = {}
+          puts "Values withOUT UNIVERSAL_OPTIONS"
+          puts keys_to_names
 
           raw_values.each do |key, value|
             entry = deserialize_entry(value, raw: options[:raw])
+            puts normalize_version(keys_to_names[key], options)
 
             unless entry.nil? || entry.expired? || entry.mismatched?(normalize_version(keys_to_names[key], options))
+              puts "THE KEY"
+              puts key
+              puts "THE KEYS"
+              puts keys_to_names.keys
               values[keys_to_names[key]] = entry.value
             end
           end

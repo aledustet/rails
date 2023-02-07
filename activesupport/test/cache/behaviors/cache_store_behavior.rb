@@ -2,6 +2,7 @@
 
 require "active_support/core_ext/numeric/time"
 require "active_support/error_reporter/test_helper"
+require "debug"
 
 # Tests the base functionality that should be identical across all cache stores.
 module CacheStoreBehavior

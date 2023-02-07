@@ -51,6 +51,7 @@ class MemCacheStoreTest < ActiveSupport::TestCase
   end
 
   def setup
+    puts "SKIPPPINGGG" unless MEMCACHE_UP
     skip "memcache server is not up" unless MEMCACHE_UP
 
     @namespace = "test-#{Random.rand(16**32).to_s(16)}"
@@ -365,6 +366,16 @@ class MemCacheStoreTest < ActiveSupport::TestCase
       assert_kind_of ::ConnectionPool, pool
       assert_equal 2, pool.size
       assert_equal 1, pool.instance_variable_get(:@timeout)
+    end
+  end
+
+  def test_options_are_forwarded_to_client
+    key = "test-with-false-value-the-way-the-dalli-store-did-with-local-cache"
+
+    @cache.instance_variable_get(:@data).with { |c| c.set(@cache.send(:normalize_key, key, nil), false, 0, compress: false) }
+    @cache.with_local_cache do
+      assert_nil @cache.read(key)
+      assert_equal false, @cache.fetch(key) { false }
     end
   end
 
