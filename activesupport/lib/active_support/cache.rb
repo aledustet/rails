@@ -18,10 +18,6 @@ module ActiveSupport
     autoload :NullStore,        "active_support/cache/null_store"
     autoload :RedisCacheStore,  "active_support/cache/redis_cache_store"
 
-    # These options mean something to all cache implementations. Individual cache
-    # implementations may support additional options.
-    UNIVERSAL_OPTIONS = [:namespace, :compress, :compress_threshold, :expires_in, :expire_in, :expired_in, :race_condition_ttl, :coder, :skip_nil]
-
     DEFAULT_COMPRESS_LIMIT = 1.kilobyte
 
     # Mapping of canonical option names to aliases that a store will recognize.

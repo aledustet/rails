@@ -28,6 +28,11 @@ module ActiveSupport
     # MemCacheStore implements the Strategy::LocalCache strategy which implements
     # an in-memory cache inside of a block.
     class MemCacheStore < Store
+
+      # These options represent behavior overriden by this implementation and should
+      # not be allowed to get down to the Dalli client
+      OVERRIDEN_OPTIONS = [:namespace, :compress, :compress_threshold, :expires_in, :expire_in, :expired_in, :race_condition_ttl, :coder, :skip_nil]
+
       # Advertise cache versioning support.
       def self.supports_cache_versioning?
         true
@@ -125,7 +130,7 @@ module ActiveSupport
           mem_cache_options = options.dup
           # The value "compress: false" prevents duplicate compression within Dalli.
           mem_cache_options[:compress] = false
-          (UNIVERSAL_OPTIONS - %i(compress)).each { |name| mem_cache_options.delete(name) }
+          (OVERRIDEN_OPTIONS - %i(compress)).each { |name| mem_cache_options.delete(name) }
           @data = self.class.build_mem_cache(*(addresses + [mem_cache_options]))
         end
       end
@@ -286,7 +291,14 @@ module ActiveSupport
 
         # Reads multiple entries from the cache implementation.
         def read_multi_entries(names, **options)
-          keys_to_names = names.index_by { |name| normalize_key(name, options) }
+          keys_to_names = names.index_by do |name|
+            normalized_key = normalize_key(name, options)
+            if dalli_client_with_namespace?
+              dalli_client_key(normalized_key)
+            else
+              normalized_key
+            end
+          end
 
           raw_values = @data.with { |c| c.get_multi(keys_to_names.keys) }
           values = {}
@@ -352,6 +364,26 @@ module ActiveSupport
             source: "mem_cache_store.active_support",
           )
           fallback
+        end
+
+        def dalli_client_key(key)
+          # this is a workaround for the fact that the dalli clinet key manager
+          # will do it's own truncation of the key when is above 250 chars, and
+          # it happens when a namespace is added to the client
+          # from the key on multi-get, so we need to remove it manually
+          dalli_key = dalli_key_manager.validate_key(key)
+          # there seems to be a bug on the pipelined getter that removes the namespace
+          # https://github.com/petergoldstein/dalli/blob/88614e8c9ed63c92bff18da94830fd1e30782099/lib/dalli/pipelined_getter.rb#L139
+          # from the key on multi-get, so we need to remove it manually
+          dalli_key_manager.key_without_namespace(dalli_key)
+        end
+
+        def dalli_key_manager
+          @dalli_key_manager ||= @data&.instance_variable_get(:@key_manager)
+        end
+
+        def dalli_client_with_namespace?
+          dalli_key_manager&.namespace&.present?
         end
     end
   end
