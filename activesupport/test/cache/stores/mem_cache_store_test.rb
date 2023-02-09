@@ -29,11 +29,13 @@ class MemCacheStoreTest < ActiveSupport::TestCase
     end
   end
 
+  DEFAULT_SERVER = ENV["MEMCACHE_SERVERS"] || "localhost:11211"
+
   if ENV["CI"]
     MEMCACHE_UP = true
   else
     begin
-      servers = ENV["MEMCACHE_SERVERS"] || "localhost:11211"
+      servers = DEFAULT_SERVER
       ss = Dalli::Client.new(servers).stats
       raise Dalli::DalliError unless ss[servers] || ss[servers + ":11211"]
 
@@ -274,6 +276,16 @@ class MemCacheStoreTest < ActiveSupport::TestCase
     cache = lookup_store(Dalli::Client.new("custom_host"))
 
     assert_equal ["custom_host"], servers(cache)
+  end
+
+  def test_uses_dalli_client_with_custom_options_if_provided
+    cache = lookup_store(Dalli::Client.new(DEFAULT_SERVER, { namespace: @namespace }))
+    key = SecureRandom.alphanumeric * 2048
+    assert cache.write(key, "bar")
+    assert_equal "bar", cache.read(key)
+    assert_equal "bar", cache.fetch(key)
+    assert_nil cache.read("#{key}x")
+    assert_equal({ key => "bar" }, cache.read_multi(key))
   end
 
   def test_forwards_string_addresses_if_present
